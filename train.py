@@ -30,7 +30,6 @@ def margin_loss(y_true, y_pred):
 
 def load_weights(model):
     epoch = 0
-    step = 0
     path_info = os.path.join(FLAGS.model_dir, 'info')
     if os.path.isfile(path_info):
         f = open(path_info)
@@ -40,9 +39,8 @@ def load_weights(model):
         if os.path.isfile(path):
             logging.info('Loading %s' % filename)
             model.load_weights(path)
-            epoch = int(filename.split('_')[1])
-            step = int(filename.split('.')[0].split('_')[2])
-    return epoch, step
+            epoch = int(filename.split('_')[1].split('.')[0])
+    return epoch
 
 def named_logs(model, logs, step):
   result = { 'batch': step, 'size': FLAGS.batch_size }
@@ -53,46 +51,31 @@ def named_logs(model, logs, step):
 def main(not_parsed_args):
     # we use a margin loss
     model = CapsNet()
-    last_epoch, last_step = load_weights(model)
+    last_epoch = load_weights(model)
     model.compile(loss=margin_loss, optimizer=optimizers.Adam(FLAGS.lr), metrics=['accuracy'])
     model.summary()
 
-    dataset = Dataset(FLAGS.dataset)
+    dataset = Dataset(FLAGS.dataset, FLAGS.batch_size)
     tensorboard = TensorBoard(log_dir='./tf_logs', batch_size=FLAGS.batch_size, write_graph=False, write_grads=True, write_images=True, update_freq='batch')
     tensorboard.set_model(model)
 
     for epoch in range(last_epoch, FLAGS.epochs):
-        tensorboard.on_epoch_begin(epoch)
-        for step in range(last_step+1, dataset.count // FLAGS.batch_size):
-            tensorboard.on_batch_begin(step)
-            x_train, y_train = dataset.load_image(FLAGS.batch_size)
-            loss = model.train_on_batch(x_train, y_train)
-            logging.info('Epoch %d step %d: loss %.6f accuracy %.6f' % (epoch, step, loss[0], loss[1]))
-            tensorboard.on_batch_end(step, named_logs(model, loss, step))
+        logging.info('Epoch %d' % epoch)
+        model.fit_generator(generator=dataset,
+            epochs=1,
+            steps_per_epoch=len(dataset)/FLAGS.batch_size,
+            verbose=1,
+            validation_data=dataset.eval_dataset,
+            validation_steps=len(dataset.eval_dataset)/FLAGS.batch_size)
 
-            # if FLAGS.dataset_val and step > 0 and step % FLAGS.val_interval == 0 or step == dataset.count // FLAGS.batch_size - 1:
-            #     logging.info('Validation start')
-            #     val_loss = 0
-            #     val_psnr = 0
-            #     for _ in range(len(val_set)):
-            #         x_val, y_val = val_set.batch(1)
-            #         score = model.test_on_batch(x_val, y_val)
-            #         val_loss += score[0]
-            #         val_psnr += score[1]
-            #     val_loss /= len(val_set)
-            #     val_psnr /= len(val_set)
-            #     logging.info('Validation average loss %f psnr %f' % (val_loss, val_psnr))
-
-            if step > 0 and step % FLAGS.save_interval == 0:
-                logging.info('Saving model')
-                filename = 'model_%d_%d.h5' % (epoch, step)
-                path = os.path.join(FLAGS.model_dir, filename)
-                path_info = os.path.join(FLAGS.model_dir, 'info')
-                model.save_weights(path)
-                f = open(path_info, 'w')
-                f.write(filename)
-                f.close()
-        last_step = -1
+        logging.info('Saving model')
+        filename = 'model_%d.h5' % (epoch)
+        path = os.path.join(FLAGS.model_dir, filename)
+        path_info = os.path.join(FLAGS.model_dir, 'info')
+        model.save_weights(path)
+        f = open(path_info, 'w')
+        f.write(filename)
+        f.close()
 
 if __name__ == '__main__':
     tf.app.run()

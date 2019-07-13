@@ -5,16 +5,21 @@ import numpy as np
 from PIL import Image, ImageOps
 from keras import utils
 
-class Dataset():
-    def __init__(self, dataset_path):
-        self.size = 256
+class Dataset(utils.Sequence):
+    def __init__(self, dataset_path, batch_size):
+        self.size = 64
+        self.batch_size = batch_size
         self.names = {}
         self.boxes = self.load_bbox(dataset_path)
         self.count = len(self.boxes)
         self.num_classes = len(self.names)
         self.seq = np.arange(self.count)
         np.random.shuffle(self.seq)
-        self.pseq = 0
+
+        # Train eval split
+        self.count_train = int(self.count*0.9)
+        self.count_eval = self.count - self.count_train
+        self.eval_dataset = self.EvalDataset(self)
 
     def load_bbox(self, dataset_path):
         dataset = []
@@ -49,27 +54,52 @@ class Dataset():
         im = im.resize((self.size, self.size))
         return im
 
-    def load_image(self, batch_size):
+    def __len__(self):
+        return self.count_train
+
+    def getImage(self, filename, box):
+        img = Image.open(filename)
+        im = img.crop(box)
+        im = self.resize(im)
+        im = np.asarray(im, dtype=np.float32) / 255.0
+        img.close()
+        return im
+
+    def __getitem__(self, index):
         x = []
         y = []
-        for i in range(batch_size):
-            box = self.boxes[self.seq[self.pseq + i]]
-            filename = box['filename']
-            img = Image.open(filename)
-            im = img.crop(box['box'])
-            im = self.resize(im)
-            im = np.asarray(im, dtype=np.float32) / 255.0
+        for i in range(self.batch_size):
+            box = self.boxes[self.seq[(index + i) % self.count_train]]
+            im = self.getImage(box['filename'], box['box'])
             x.append(im)
             y.append(box['id'])
-            img.close()
-        self.pseq += batch_size
         x = np.array(x)
         y = np.array(y)
         y = utils.to_categorical(y, self.num_classes)
         return x, y
 
+    class EvalDataset(utils.Sequence):
+        def __init__(self, dataset):
+            self.dataset = dataset
+
+        def __len__(self):
+            return self.dataset.count_eval
+
+        def __getitem__(self, index):
+            x = []
+            y = []
+            for i in range(self.dataset.batch_size):
+                box = self.boxes[self.seq[(index + i) % self.count_eval + self.dataset.count_train]]
+                im = self.dataset.getImage(box['filename'], box['box'])
+                x.append(im)
+                y.append(box['id'])
+            x = np.array(x)
+            y = np.array(y)
+            y = utils.to_categorical(y, self.num_classes)
+            return x, y
+
 if __name__ == '__main__':
-    dataset = Dataset('../dataset')
+    dataset = Dataset('../dataset', 32)
     print('names: %d' % len(dataset.names))
     for i in range(10):
         images, labels = dataset.load_image(32)

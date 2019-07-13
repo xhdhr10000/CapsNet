@@ -6,7 +6,7 @@ flags = tf.app.flags
 FLAGS = flags.FLAGS
 
 flags.DEFINE_integer('epochs', 100, 'Training epochs')
-flags.DEFINE_integer('batch_size', 32, 'Batch size for training')
+flags.DEFINE_integer('batch_size', 16, 'Batch size for training')
 flags.DEFINE_float('lr', 0.0001, 'Learning rate')
 flags.DEFINE_string('dataset', 'dataset', 'Dataset for training')
 flags.DEFINE_string('dataset_val', None, 'Dataset for validation')
