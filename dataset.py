@@ -89,13 +89,13 @@ class Dataset(utils.Sequence):
             x = []
             y = []
             for i in range(self.dataset.batch_size):
-                box = self.boxes[self.seq[(index + i) % self.count_eval + self.dataset.count_train]]
+                box = self.dataset.boxes[self.dataset.seq[(index + i) % self.dataset.count_eval + self.dataset.count_train]]
                 im = self.dataset.getImage(box['filename'], box['box'])
                 x.append(im)
                 y.append(box['id'])
             x = np.array(x)
             y = np.array(y)
-            y = utils.to_categorical(y, self.num_classes)
+            y = utils.to_categorical(y, self.dataset.num_classes)
             return x, y
 
 if __name__ == '__main__':

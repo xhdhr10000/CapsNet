@@ -1,2 +1,4 @@
 __pycache__/
 venv/
+*.h5
+models/
