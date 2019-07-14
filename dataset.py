@@ -57,11 +57,21 @@ class Dataset(utils.Sequence):
     def __len__(self):
         return self.count_train
 
+    def imageAugmentation(self, im):
+        if np.random.randint(2):
+            im = np.fliplr(im)
+        if np.random.randint(2):
+            im = np.flipud(im)
+        if np.random.randint(2):
+            im = np.rot90(im)
+        return im
+
     def getImage(self, filename, box):
         img = Image.open(filename)
         im = img.crop(box)
         im = self.resize(im)
         im = np.asarray(im, dtype=np.float32) / 255.0
+        im = self.imageAugmentation(im)
         img.close()
         return im
 
@@ -99,9 +109,11 @@ class Dataset(utils.Sequence):
             return x, y
 
 if __name__ == '__main__':
-    dataset = Dataset('../dataset', 32)
+    dataset = Dataset('../dataset', 1)
     print('names: %d' % len(dataset.names))
     for i in range(10):
-        images, labels = dataset.load_image(32)
+        images, labels = dataset[i]
         print(images.shape)
         print(labels.shape)
+        images *= 255.0
+        Image.fromarray(images[0].astype('uint8'), mode='RGB').show()
