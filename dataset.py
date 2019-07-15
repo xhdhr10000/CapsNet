@@ -4,10 +4,11 @@ import os
 import numpy as np
 from PIL import Image, ImageOps
 from keras import utils
+import imgaug.augmenters as iaa
 
 class Dataset(utils.Sequence):
     def __init__(self, dataset_path, batch_size):
-        self.size = 64
+        self.size = 128
         self.batch_size = batch_size
         self.names = {}
         self.boxes = self.load_bbox(dataset_path)
@@ -15,6 +16,16 @@ class Dataset(utils.Sequence):
         self.num_classes = len(self.names)
         self.seq = np.arange(self.count)
         np.random.shuffle(self.seq)
+
+        sometimes = lambda aug: iaa.Sometimes(0.5, aug)
+        self.aug = iaa.Sequential([
+            iaa.Fliplr(0.5), # horizontally flip 50% of the images
+            iaa.GaussianBlur(sigma=(0, 2.0)), # blur images with a sigma of 0 to 2.0
+            iaa.GammaContrast(gamma=(0.3, 2.0)),
+            iaa.AdditiveGaussianNoise(loc=0, scale=(0.0, 0.01*255), per_channel=0.5),
+            sometimes(iaa.PiecewiseAffine(scale=(0.01, 0.05))),
+        ])
+
 
         # Train eval split
         self.count_train = int(self.count*0.9)
@@ -55,23 +66,13 @@ class Dataset(utils.Sequence):
         return im
 
     def __len__(self):
-        return self.count_train
-
-    def imageAugmentation(self, im):
-        if np.random.randint(2):
-            im = np.fliplr(im)
-        if np.random.randint(2):
-            im = np.flipud(im)
-        if np.random.randint(2):
-            im = np.rot90(im)
-        return im
+        return self.count_train // self.batch_size
 
     def getImage(self, filename, box):
         img = Image.open(filename)
         im = img.crop(box)
         im = self.resize(im)
-        im = np.asarray(im, dtype=np.float32) / 255.0
-        im = self.imageAugmentation(im)
+        im = np.asarray(im, dtype='uint8')
         img.close()
         return im
 
@@ -79,11 +80,13 @@ class Dataset(utils.Sequence):
         x = []
         y = []
         for i in range(self.batch_size):
-            box = self.boxes[self.seq[(index + i) % self.count_train]]
+            box = self.boxes[self.seq[(index * self.batch_size + i) % self.count_train]]
             im = self.getImage(box['filename'], box['box'])
             x.append(im)
             y.append(box['id'])
         x = np.array(x)
+        x = self.aug.augment_images(x)
+        x = x.astype('float32') / 255.0
         y = np.array(y)
         y = utils.to_categorical(y, self.num_classes)
         return x, y
@@ -93,13 +96,13 @@ class Dataset(utils.Sequence):
             self.dataset = dataset
 
         def __len__(self):
-            return self.dataset.count_eval
+            return self.dataset.count_eval // self.dataset.batch_size
 
         def __getitem__(self, index):
             x = []
             y = []
             for i in range(self.dataset.batch_size):
-                box = self.dataset.boxes[self.dataset.seq[(index + i) % self.dataset.count_eval + self.dataset.count_train]]
+                box = self.dataset.boxes[self.dataset.seq[(index * self.dataset.batch_size + i) % self.dataset.count_eval + self.dataset.count_train]]
                 im = self.dataset.getImage(box['filename'], box['box'])
                 x.append(im)
                 y.append(box['id'])
@@ -109,11 +112,13 @@ class Dataset(utils.Sequence):
             return x, y
 
 if __name__ == '__main__':
-    dataset = Dataset('../dataset', 1)
+    bs = 4
+    dataset = Dataset('../dataset', bs)
     print('names: %d' % len(dataset.names))
-    for i in range(10):
+    for i in range(2):
         images, labels = dataset[i]
         print(images.shape)
         print(labels.shape)
         images *= 255.0
-        Image.fromarray(images[0].astype('uint8'), mode='RGB').show()
+        for j in range(bs):
+            Image.fromarray(images[j].astype('uint8'), mode='RGB').show()

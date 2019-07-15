@@ -63,10 +63,10 @@ def main(not_parsed_args):
         logging.info('Epoch %d' % epoch)
         model.fit_generator(generator=dataset,
             epochs=1,
-            steps_per_epoch=len(dataset)/FLAGS.batch_size,
+            steps_per_epoch=len(dataset),
             verbose=1,
             validation_data=dataset.eval_dataset,
-            validation_steps=len(dataset.eval_dataset)/FLAGS.batch_size)
+            validation_steps=len(dataset.eval_dataset))
 
         logging.info('Saving model')
         filename = 'model_%d.h5' % (epoch)
