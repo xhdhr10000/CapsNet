@@ -107,6 +107,7 @@ class Dataset(utils.Sequence):
                 x.append(im)
                 y.append(box['id'])
             x = np.array(x)
+            x = x.astype('float32') / 255.0
             y = np.array(y)
             y = utils.to_categorical(y, self.dataset.num_classes)
             return x, y
